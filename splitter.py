@@ -1,14 +1,10 @@
 import numpy as np
 from numpy import all
 import matplotlib.pylab as plt
-from test import show_images
 from PIL import Image
 import matplotlib as plt
 import cv2
 import scipy.spatial.distance as SSD
-
-
-img = Image.open('blocks.jpg')
 
 def pieces(image, target) :
     images = []

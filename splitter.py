@@ -1,11 +1,10 @@
 import numpy as np
 from numpy import all
-import matplotlib.pylab as plt
 from PIL import Image
-import matplotlib as plt
-import cv2
 import scipy.spatial.distance as SSD
 import math
+import matplotlib as plt
+
 
 def pieces(image, target) :
     images = []
@@ -30,14 +29,14 @@ def pieces(image, target) :
         temp_arr = np.array(images[x])
         temp_list.append(temp_arr)
     np_image = np.array(temp_list)
-    #np.random.shuffle(np_image)
+    np.random.shuffle(np_image)
     return np_image
 
 
 
 def edges(np_image) :
     h, w, c = np_image[0].shape
-    edge_pieces = [[] for i in range(len(np_image))]
+    edge_pieces = []
     target_size = 2
     north_box = (0, 0, w, target_size)
     south_box = (0, h-target_size,w, h)
@@ -56,10 +55,10 @@ def edges(np_image) :
         south = Image.fromarray(np_image[x])
         south = south.crop(south_box)
         south = np.array(south)
-        edge_pieces[x].append(north)
-        edge_pieces[x].append(east)
-        edge_pieces[x].append(south)
-        edge_pieces[x].append(west)
+        edge_pieces.append(north)
+        edge_pieces.append(east)
+        edge_pieces.append(south)
+        edge_pieces.append(west)
     np_edge = np.array(edge_pieces)
     return np_edge
 
@@ -67,37 +66,39 @@ def edges(np_image) :
 def compatibility(np_pieces):
     results = []
     for x in range(0, len(np_pieces)):
-        for y in range(0, len(np_pieces[x])):
-                results.append(northsouth(np_pieces[x][y], np_pieces, x, y))
+        results.append(northsouth(np_pieces[x], np_pieces, x))
     for x, elem in enumerate(results):
         results[x].sort()
     return results
 
 def print_results(results):
     piece_num = 0
-    edge_num = -1
+    results_matrix = np.full((len(results), 16), -1, dtype='float')
     for x, result in enumerate(results):
-        edge_num += 1
+        edge_num = x % 4
         if x % 4 == 0 and x != 0:
             piece_num += 1
-            edge_num = 0
         print('Piece number ' + str(piece_num) + ' edge number ' + str(edge_num))
         print(np.array(result))
+    for x in range(0, len(results)):
+        for y in range(0, len(results[x])):
+           edge = results[x][y][1]
+           score = results[x][y][0]
+           results_matrix[x,edge] = score
+    print(results_matrix)
 
-
-def northsouth(target, pieces, xx, yy):
+def northsouth(target, pieces, xx):
     target = plt.colors.rgb_to_hsv(target)
     ax = 0
     results = []
-    if yy % 2 == 0:
+    if xx % 2 == 0:
         start = 0
     else:
         start = 1
-    for x in range(0, len(pieces)):
-     for y in range(start, len(pieces[x]), 2):
+    for x in range(start, len(pieces), 2):
          #print(str(x) + ' ' + str(y))
-         if (x != xx or y != yy):
-            edgeCand = pieces[x][y]
+         if (x != xx):
+            edgeCand = pieces[x]
             edgeCand = plt.colors.rgb_to_hsv(edgeCand)
             result_1 = mahalanobis(np.array(np.gradient(target[:,:,0], axis=ax)),
                                    np.array(np.gradient(edgeCand[:,:,0], axis=ax)))
@@ -121,7 +122,7 @@ def northsouth(target, pieces, xx, yy):
             result_3 = np.median(result_3)
             #result_3 = result_3.mean()
             result = result_1 +result_2+result_3
-            results.append([result,x, y])
+            results.append([result,x])
     return results
 
 
@@ -153,7 +154,10 @@ def reconstruct(results, np_pieces):
     w, h = img.size
     result.paste(img, (x, y))
     for x in range(0, len(results)):
-        score, piece, position = results[x][0]
+        score, piece = results[x][0]
+        position = piece % 4
+        piece = int(piece  / 4)
+        print(str(piece) + ' ' + str(piece))
         target_image = np_pieces[piece]
         target_image = Image.fromarray(target_image)
         if position == 3 and piece == 2:

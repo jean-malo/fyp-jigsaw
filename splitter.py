@@ -4,10 +4,23 @@ import scipy.spatial.distance as SSD
 import math
 import networkx as nx
 import cv2 as cv
-import matplotlib as plt
-plt.use('TkAgg')
-import matplotlib.pyplot as plt2
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+from collections import defaultdict
+from math import log10, floor
+from decimal import *
+from math import sqrt
 
+getcontext().prec = 28
+def shuflle2dArray(np_array):
+    np_array = np.array(np_array)
+    arr_shape = np_array.shape
+    new_arr = np_array.reshape(arr_shape[0]*arr_shape[1],arr_shape[-3],arr_shape[-2],arr_shape[-1])
+    np.random.shuffle(new_arr)
+    arr = new_arr.reshape(arr_shape)
+    np_array = arr
+    return np_array
 
 def pieces(image, width_num, height_num):
     images = [[None for _ in range(width_num)] for _ in range(height_num)]
@@ -25,37 +38,109 @@ def pieces(image, width_num, height_num):
             images[i][j] = temp_img
             x += split_width
         y += split_height
+    images = shuflle2dArray(images)
     return images
 
-def edges(np_image) :
-    #h, w, c = np_image[0].shape
-    edge_pieces = []
-    target_size = 5
-    #north_box = (0, 0, w, target_size)
-    #south_box = (0, h-target_size,w, h)
-    #west_box = (0, 0, target_size, h)
-    #east_box = (w - target_size, 0, w, h)
+
+def edges(np_image, target) :
+    target_size = target
+    shape_ar = np.array(np_image).shape
+    result_edge = [[['#' for _ in range(4)] for _ in range(shape_ar[1])] for _ in range(shape_ar[0])]
     for x in range(0, len(np_image)) :
         for y in range(0,len(np_image[x])):
             north = np_image[x][y][0:target_size,:,:]
-            south = np_image[x][y][-target_size-1:,:,:]
+            south = np_image[x][y][-target_size:,:,:]
             west = np_image[x][y][:, 0:target_size, :]
-            east = np_image[x][y][:, -target_size-1:, :]
-            Image.fromarray(north).show()
-            Image.fromarray(south).show()
-            Image.fromarray(south).show()
-            Image.fromarray(south).show()
-    np_edge = np.array(edge_pieces)
-    #return np_edge
+            east = np_image[x][y][:, -target_size:, :]
+            result_edge[x][y][0] = north
+            result_edge[x][y][1] = east
+            result_edge[x][y][2] = south
+            result_edge[x][y][3] = west
+    return result_edge
 
 
 def compatibility(np_pieces):
-    results = []
+    shape_results = (len(np_pieces),len(np_pieces[0]),4,len(np_pieces),len(np_pieces[0]))
+    results = np.empty(shape_results)
+    results[:] = 1000
     for x in range(0, len(np_pieces)):
-        results.append(northsouth(np_pieces[x], np_pieces, x))
-    for x, elem in enumerate(results):
-        results[x].sort()
+        for y in range(0,len(np_pieces[x])):
+            print('Piece ' + ' ' + str(x) + ' ' + str(y) + ' finished processing...')
+            for z in range(4):
+                for xx in range(0, len(np_pieces)):
+                    for yy in range(0, len(np_pieces[x])):
+                        if x != xx or y != yy:
+                            zz = getInverse(z)
+                            results[x][y][z][xx][yy] = get_score(np_pieces[x][y][z],np_pieces[xx][yy][zz],z)
+    #for x, elem in enumerate(results):
+        #results[x].sort()
     return results
+
+#Return the relevant edge position given a position
+def getInverse(p):
+    if p == 0:
+        return 2
+    if p == 1:
+        return 3
+    if p == 2:
+        return 0
+    if p == 3:
+        return 1
+
+def get_best_match(piece_X, piece_Y, results, edge):
+    piece_result = results[piece_X][piece_Y][edge]
+    print(piece_result)
+    print(piece_result.argmin())
+    return np.unravel_index(piece_result.argmin(), piece_result.shape)
+
+def get_score(piece1, piece2, edge):
+    piece1 = matplotlib.colors.rgb_to_hsv(piece1 / float(256))
+    piece2 = matplotlib.colors.rgb_to_hsv(piece2 / float(256))
+    dummy_gradients = [[0, 0, 0], [1, 1, 1], [-1, -1, -1], [0, 0, 1], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, -1, 0],[0, 0, -1]]
+    if edge == 0:
+        grad_p1 = abs(piece1[0, :, :] - piece1[1, :, :])
+        grad_p2 = abs(piece2[-1, :, :] - piece2[-2, :, :])
+        grad_p1p2 = abs(piece2[-1, :, :] - piece1[0, :, :])
+
+    elif edge == 1:
+        grad_p1 = abs(piece1[:,-1,:] - piece1[:,-2,:])
+        grad_p2 = abs(piece2[:, 0, :] - piece2[:, 1, :])
+        grad_p1p2 = abs(piece2[:, 0, :] - piece1[:, -1, :])
+
+
+    elif edge == 2:
+        grad_p1 = abs(piece1[-1, :, :] - piece1[-2, :, :])
+        grad_p2 = abs(piece2[0, :, :] - piece2[1, :, :])
+        grad_p1p2 = abs(piece2[0, :, :] - piece1[-1, :, :])
+
+
+    elif edge == 3:
+        grad_p1 = abs(piece1[:,0, :] - piece1[:, 1, :])
+        grad_p2 = abs(piece2[:, -1, :] - piece2[:, -2, :])
+        grad_p1p2 = abs(piece2[:, -1, :] - piece1[:, 0, :])
+
+    else:
+        raise ValueError('Edge number out of range')
+
+    gr_p1_mean = np.mean(grad_p1)
+    gr_p2_mean = np.mean(grad_p2)
+
+    gr_diff_p1_mean = abs(grad_p1p2 - gr_p1_mean)
+    gr_diff_p2_mean = abs(grad_p1p2 - gr_p2_mean)
+
+    grad_p1_dummy = np.append(grad_p1, dummy_gradients, axis=0)
+    grad_p2_dummy = np.append(grad_p2, dummy_gradients, axis=0)
+
+    p1_cov = np.cov(grad_p1_dummy, rowvar=False)
+    p2_cov = np.cov(grad_p2_dummy, rowvar=False)
+
+    p1_cov_inv = np.linalg.inv(p1_cov)
+    p2_cov_inv = np.linalg.inv(p2_cov)
+
+    mahalanobis_distp1p2 = sqrt(np.sum(np.dot(np.dot(gr_diff_p1_mean, p1_cov_inv),np.transpose(gr_diff_p1_mean))))
+    mahalanobis_distp2p1 = sqrt(np.sum(np.dot(np.dot(gr_diff_p2_mean, p2_cov_inv),np.transpose(gr_diff_p2_mean))))
+
+    return(mahalanobis_distp1p2 + mahalanobis_distp2p1)
 
 def print_results(results):
     piece_num = 0
@@ -73,54 +158,7 @@ def print_results(results):
            results_matrix[x,edge] = score
     print(results_matrix)
 
-def northsouth(target, pieces, xx):
-    target = plt.colors.rgb_to_hsv(target)
-    ax = 0
-    results = []
-    if xx % 2 == 0:
-        start = 0
-    else:
-        start = 1
-    for x in range(start, len(pieces), 2):
-         #print(str(x) + ' ' + str(y))
-         if (x != xx):
-            edgeCand = pieces[x]
-            edgeCand = plt.colors.rgb_to_hsv(edgeCand)
-            result_1 = mahalanobis(np.array(np.gradient(target[:,:,0], axis=ax)),
-                                   np.array(np.gradient(edgeCand[:,:,0], axis=ax)))
-            result_1inv = mahalanobis(np.array(np.gradient(edgeCand[:, :, 0], axis=ax)),
-                                      np.array(np.gradient(target[:, :, 0], axis=ax)))
-            result_1 = np.median(result_1)
-            result_2 = mahalanobis(np.array(np.gradient(target[:,:,1], axis=ax)),
-                                   np.array(np.gradient(edgeCand[:,:,1], axis=ax)))
-            result_2inv = mahalanobis(np.array(np.gradient(edgeCand[:, :, 1], axis=ax)),
-                                      np.array(np.gradient(target[:, :, 1], axis=ax)))
-            result_2 = np.median(result_2)
-            result_3 = mahalanobis(np.array(np.gradient(target[:,:,2], axis=ax)),
-                                   np.array(np.gradient(edgeCand[:,:,2], axis=ax)))
-            result_3inv = mahalanobis(np.array(np.gradient(edgeCand[:, :, 2], axis=ax)),
-                                      np.array(np.gradient(target[:, :, 2], axis=ax)))
-            result_3 = np.median(result_3)
-            result = result_1 +result_2+result_3
-            results.append([result,x])
-    return results
 
-
-def mahalanobis(colchan1, colchan2):
-    epsilon = 10**-6
-    dummy_gradients = [[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,0,1],[0,1,1],[1,1,1],[0,0,0]]
-    #colchan1= np.append(colchan1, dummy_gradients)
-    #colchan2 = np.append(colchan2, dummy_gradients)
-    M = np.array([colchan1.mean(), colchan2.mean()])
-    covariance = np.cov([colchan1.ravel(), colchan2.ravel()])
-    try:
-        inv_cov = np.linalg.inv(covariance)
-    except Exception:
-        inv_cov = np.linalg.inv(covariance + np.eye(covariance.shape[1]) * epsilon)
-    D = np.dstack([colchan1, colchan2]).reshape(-1, 2)
-    result = SSD.cdist(D, M[None, :], metric='mahalanobis', VI=inv_cov)
-    result = result.reshape(colchan1.shape)
-    return result
 
 
 def reconstruct(results, np_pieces):
@@ -154,28 +192,56 @@ def reconstruct(results, np_pieces):
 # Remove any result < 10^-6 and equal to nan
 # Return the smallest result divided by the second smallest in order to discern good results from inconclusive ones
 def result_cleaner(results):
-    np_results = np.array(results)
-    result_clean = []
-    #print(np.array(results))
-    np_results = np_results[np.logical_not(np.logical_or(np.isnan(np_results[:, :, 0]),
-                                                         np.less(np_results[:, :, 0], 10 ** -6)))]
-    print(np.reshape(np_results))
-    #for x, result in enumerate(np_results):
-        #result[0][0] = result[0][0] / result[1][0]
-        #result_clean.append(result[0])
-    #print(result_clean)
-    return result_clean
+    r_shape = results.shape
+    d = defaultdict(lambda: defaultdict(dict))
+    for x in range(0, len(results)):
+        for y in range(0, len(results[x])):
+            for z in range(4):
+                s = results[x][y][z].shape
+                res = np.argsort(np.ravel(results[x][y][z]))[:2]
+                res_form = np.unravel_index(res, s)
+                lX = res_form[0][0]
+                lY = res_form[0][1]
+                lXX = res_form[1][0]
+                lYY = res_form[1][1]
+                d[x][y][z] = (results[x][y][z][lX][lY]/results[x][y][z][lXX][lYY], lX, lY)
+    return d
+
+def print_graph(graph):
+    pos = nx.spring_layout(graph)
+    nx.draw_networkx_nodes(graph, pos, node_size=300)
+    nx.draw_networkx_edges(graph, pos, edge_color='black', width=3)
+    labels = nx.get_edge_attributes(graph, 'weight')
+    print(labels)
+    nx.draw_networkx_labels(graph, pos, font_size=20, font_family='sans-serif')
+    nx.draw_networkx_edge_labels(graph, pos, edge_labels=labels)
+    plt.axis('off')
+    plt.show()
+
+
+
+
+
+def graph_create(results):
+    graph = nx.Graph()
+    for x in range(0, len(results)):
+        for y in range(0, len(results[x])):
+            for z in range(4):
+                graph.add_edge((x,y), (results[x][y][z][1:]), weight=results[x][y][z][0])
+    print(nx.shortest_path(graph, source=(0,0), target=(1,1)))
+    return graph
+
+
 
 def graph_init(results):
-    #print(np.array(results))
     graphs = []
     nodes = [x for x in range(0,len(results))]
     count = 0
     piece_num = 0
     graph = nx.Graph()
     start = 0
-    end = 4
-    for y in range(0, len(results) // 4):
+    end = 10
+    for y in range(0, len(results)):
         graph = nx.Graph()
         start = y*4
         end = start + 4
@@ -205,5 +271,5 @@ def graph_init(results):
         labels2 = nx.get_edge_attributes(graph, 'object')
         nx.draw_networkx_labels(graph, pos, font_size=20, font_family='sans-serif')
         nx.draw_networkx_edge_labels(graph, pos, edge_labels=labels)
-        plt2.axis('off')
-        plt2.show()
+        plt.axis('off')
+        plt.show()

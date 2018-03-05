@@ -1,4 +1,4 @@
-from splitter import pieces, edges, compatibility, print_results, reconstruct, graph_init, result_cleaner, graph_create, print_graph, get_best_match
+from splitter import pieces, edges, compatibility, graph_create, print_graph, get_best_match, is_best_match, reconstruct
 from PIL import Image
 import math
 import scipy.spatial.distance as SSD
@@ -15,7 +15,7 @@ np.set_printoptions(suppress=True)
 def show_pieces(np_array):
     x= 0
     y = 0
-    result = Image.new('RGB', (4839,3198))
+    result = Image.new('RGB', (1000,668))
     print(len(np_array))
     for i in range(0,len(np_array)):
         x=0
@@ -50,13 +50,13 @@ def jpg_image_to_array(image_path):
     im_arr = im_arr.reshape((image.size[1], image.size[0], 3))
   return im_arr
 
-img = jpg_image_to_array('forest.jpeg')
-np_image = pieces(img,10,10)
+img = jpg_image_to_array('fez.jpg')
+np_image = pieces(img,5,5)
 show_pieces(np_image)
 result_edge = edges(np_image,4)
 results = compatibility(result_edge)
-print(get_best_match(0,0,results, 1))
-#dico = result_cleaner(results)
-#graphres = graph_create(dico)
-
-#print_graph(graphres)
+graphres = graph_create(results)
+print(is_best_match(0,0,0,1,results,3))
+res_place =reconstruct(graphres, results)
+print(res_place[0][0][1])
+print_graph(graphres)

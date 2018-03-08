@@ -12,7 +12,6 @@ from math import log10, floor
 from decimal import *
 from math import sqrt
 
-getcontext().prec = 28
 def shuflle2dArray(np_array):
     np_array = np.array(np_array)
     arr_shape = np_array.shape
@@ -57,6 +56,65 @@ def edges(np_image, target) :
             result_edge[x][y][3] = west
     return result_edge
 
+def convert_coord(y,x,piece_num):
+    return y*piece_num+x
+
+def decode_coord(coord, piece_num):
+    return np.unravel_index(int(coord), (piece_num*piece_num,piece_num*piece_num))
+
+def insert_piece(y,x,z,arr, y_tar, x_tar):
+    piece_num = len(arr)
+    coord = convert_coord(y_tar,x_tar,piece_num)
+    if z == 0:
+        if at_edge(y,x,z, piece_num):
+            arr = move_down(arr)
+            arr[y,x] = coord
+        else:
+            arr[y-1,x] = coord
+    if z == 1:
+        if at_edge(y,x,z, piece_num):
+            arr = move_left(arr)
+            arr[y,x] = coord
+        else:
+            arr[y,x+1] = coord
+    if z == 2:
+        if at_edge(y,x,z, piece_num):
+            arr = move_up(arr)
+            arr[y,x] = coord
+        else:
+            arr[y+1,x] = coord
+    if z == 3:
+        if at_edge(y,x,z,piece_num):
+            arr = move_right(arr)
+            arr[y,x] = coord
+        else:
+            arr[y,x-1] = coord
+    return arr
+
+def at_edge(y,x,dir, piece_num):
+    if 0 > (x or y) or (x or y) > piece_num:
+        print('Invalid inputs')
+        return -1
+    if dir == 0:
+        return y-1 < 0
+    if dir == 2:
+        return y+1 > piece_num
+    if dir == 1:
+        return x+1 >= piece_num
+    if dir == 3:
+        return x-1 < 0
+
+def move_down(arr):
+    return np.roll(arr,1, axis=0)
+
+def move_up(arr):
+    return np.roll(arr,-1, axis=0)
+
+def move_right(arr):
+    return np.roll(arr,1, axis=1)
+
+def move_left(arr):
+    return np.roll(arr,-1, axis=1)
 
 def compatibility(np_pieces):
     shape_results = (len(np_pieces),len(np_pieces[0]),4,len(np_pieces),len(np_pieces[0]))
@@ -64,13 +122,13 @@ def compatibility(np_pieces):
     results.fill(np.nan)
     for x in range(0, len(np_pieces)):
         for y in range(0,len(np_pieces[x])):
-            print('Piece ' + ' ' + str(x) + ' ' + str(y) + ' finished processing...')
             for z in range(4):
                 for xx in range(0, len(np_pieces)):
                     for yy in range(0, len(np_pieces[x])):
                         if x != xx or y != yy:
                             zz = getInverse(z)
                             results[x][y][z][xx][yy] = get_score(np_pieces[x][y][z],np_pieces[xx][yy][zz],z)
+            print('Piece ',x,y, ' completed...')
     return results
 
 #Return the relevant edge position given a position
@@ -149,67 +207,86 @@ def is_best_match(x,y,xx,yy, results, edge):
     x_match,y_match = get_best_match(x,y,results,edge)[:2]
     return (x_match,y_match) == (xx,yy)
 
-def print_graph(graphs):
-    for graph in graphs:
-        pos = nx.spring_layout(graph)
-        nx.draw_networkx_nodes(graph, pos, node_size=600)
-        nx.draw_networkx_edges(graph, pos, edge_color='black', width=3)
-        labels = nx.get_edge_attributes(graph, 'weight')
-        nx.draw_networkx_labels(graph, pos, font_size=20, font_family='sans-serif')
-        nx.draw_networkx_edge_labels(graph, pos, edge_labels=labels)
-        plt.axis('off')
-        print(graph.adj.items())
-        plt.show()
+def print_graph(graph):
+    pos = nx.spring_layout(graph)
+    nx.draw_networkx_nodes(graph, pos, node_size=600)
+    nx.draw_networkx_edges(graph, pos, edge_color='black', width=3)
+    labels = nx.get_edge_attributes(graph, 'p1')
+    nx.draw_networkx_labels(graph, pos, font_size=20, font_family='sans-serif')
+    nx.draw_networkx_edge_labels(graph, pos, edge_labels=labels)
+    plt.axis('off')
+    plt.show()
 
 
-def reconstruct(graphs, results):
-    res_shape = results.shape
-    h = res_shape[0]
-    w = res_shape[1]
-    solution = [[['#' for _ in range(4)] for _ in range(res_shape[1])] for _ in range(res_shape[0])]
-    for graph in graphs:
-        old_w = 1000000
-        for (u, v, wt) in graph.edges.data('weight'):
-            edge = graph.get_edge_data(u, v)['edge']
-            print('edge ',edge)
-            if is_best_match(u[0],u[1],v[0],v[1],results,edge):
-                solution[u[0]][u[1]][edge] = v
-                solution[v[0]][v[1]][edge] = u
-    return solution
+def find_best_start(graph):
+    start_node = (n for n in graph if len(list(graph.neighbors(n))) == 1)
+    cur_length = 10000
+    for node in list(start_node):
+        new_len = len(list(nx.single_source_shortest_path_length(graph, node, cutoff=3)))
+        if new_len < cur_length:
+            cur_length = new_len
+            target_node = node
+    return target_node
 
-def display_results(results,images):
-    img_final = np.zeroes((1000,668,3))
-    for x in range(results):
-        for y in range(results):
-            for z in range(4):
-                if results[x][y][z] != 0:
-                    target_x = results[x][y][z][0]
-                    target_Y = results[x][y][z][1]
-                    if z == 0:
-                        insert_image(img_final, images[x][y], edge)
 
-                    if z == 1:
-                        insert_image
-                    if z == 2:
-                        insert_image
-                    if z ==3:
-                        insert_image
-                    results[target_x][target_Y][z] = 0
+#check if move is possible up down left or right (none?) if so do it else move n to left right top or bottom and insert nbr in place of n
+def reconstruct(graph, images):
+    node_num = len(nx.nodes(graph))
+    arr = np.zeros((node_num,node_num))
+    edge_done = []
+    start_node_tup = find_best_start(graph)
+    tt = list(nx.bfs_successors(graph, start_node_tup))
+    for node_list in tt:
+        curr_node = node_list[0]
+        y,x = curr_node
+        if len(edge_done) == 0:
+            arr[0,0] = convert_coord(y,x,node_num)
+            edge_done.append(curr_node)
+        res = np.transpose(np.where(arr == convert_coord(y,x,node_num)))
+        y = res[0,0]
+        x = res[0,1]
+        for nodes in node_list:
+            if nodes != curr_node:
+                for node in nodes:
+                    target_node = node
+                    yy,xx = target_node
+                    p1_data = graph[curr_node][target_node]['p1']
+                    p2_data = graph[curr_node][target_node]['p2']
+                    if p1_data[:2] == curr_node:
+                        edge = p1_data[-1]
+                    else:
+                        edge = p2_data[-1]
+                    arr = insert_piece(y,x,edge,arr,yy,xx)
+                    edge_done.append(target_node)
+    return arr
 
-def graph_create(results):
-    graphs = []
+def display_image(arr,num_piece, images):
+    arr = clean_results(arr)
+    print('result array ',arr)
+    arr_coord = [[None for _ in range(num_piece)] for _ in range(num_piece)]
+    for y in range(len(arr)):
+        for x in range(len(arr[y])):
+            yy,xx = decode_coord(arr[y,x],num_piece)
+            arr_coord[y][x] = (yy,xx)
+    print('result array with coordinates adjusted ' ,arr_coord)
+    return arr_coord
+
+def clean_results(arr):
+    arr = arr[~np.all(arr == 0, axis=1)]
+    arr = np.transpose(arr)
+    arr = arr[~np.all(arr == 0, axis=1)]
+    arr = np.transpose(arr)
+    return arr
+
+
+def graph_create(results,images):
     graph = nx.Graph()
     for x in range(0, len(results)):
         for y in range(0, len(results[x])):
-            graph = nx.Graph()
             for z in range(4):
                 match_x, match_y, match_score = get_best_match(x,y,results,z)
                 # Check if edge already exists, if it does only replace current edge if match_score is smaller than existing score (this can happen at edges)
-                if graph.get_edge_data((x,y),(match_x,match_y)) is not None and graph.get_edge_data((x,y),(match_x,match_y))['weight'] < match_score:
-                    print('Edge already exists and has a lower score for piece', x, y)
-                else:
-                    graph.add_edge((x,y), (match_x,match_y), weight=round(match_score,5), edge=z)
-            graphs.append(graph)
-    return graphs
-
-
+                if not(graph.get_edge_data((x,y),(match_x,match_y)) is not None and graph.get_edge_data((x,y),(match_x,match_y))['weight'] > match_score):
+                    graph.add_edge((x,y), (match_x,match_y), weight=round(match_score,5), p1=(x,y,z), p2=(match_x,match_y,getInverse(z)),object=images[x][y])
+    T = nx.minimum_spanning_tree(graph)
+    return T, graph

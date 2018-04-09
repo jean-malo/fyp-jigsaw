@@ -10,4 +10,8 @@ pip3 install NetworkX
 pip3 install PyqT5
 pip3 install Pillow-PIL
 
-Then run python gui.py to launch the program
+Then type
+
+python gui.py
+
+to launch the program
